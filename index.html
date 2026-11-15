@@ -276,7 +276,7 @@
   }
   .scaler-reset { justify-self: start; }
   .eaters { display: grid; gap: 12px; margin-top: 10px; padding-top: 20px; border-top: var(--line) dashed var(--ink); }
-  .scaler-nudge[data-eat="1"] { background: var(--pea); }
+  .scaler-nudge[data-eat="1"], .scaler-nudge[data-serv="1"] { background: var(--pea); }
   .stepper-value {
     flex: 1; min-width: 0; display: grid; place-items: center;
     background: var(--white); border: var(--line) solid var(--ink); border-radius: 22px;
@@ -509,6 +509,8 @@
         "It feeds a family, with leftovers. Tell it how big your joint is and how many are eating, and everything else follows."
       ],
       tags: ["Family dinner", "Leftovers"],
+      art: "ham",
+      control: { heading: "How big is yours?", help: "Weigh your joint and say how many are eating. Amounts and timings follow.", burst: ["Joint feeds", "about"] },
       servesNote: "a family, with leftovers",
       scaleBy: { type: "weight", baseGrams: 3000, label: "Gammon joint weight", minGrams: 500, maxGrams: 10000, gramsPerServing: 200, minServings: 2, eaters: { label: "How many are eating?", help: "This sets the chips and peas.", default: 4, min: 1, max: 20 } },
       timing: {
@@ -580,6 +582,58 @@
         { title: "Still to note down:", text: "which mustard you used, and how long the chips took in the oven." }
       ],
       source: "Adapted from someone else’s cooking video."
+    },
+    {
+      slug: "yorkshire-puddings",
+      title: "Yorkshire Puddings",
+      subtitle: "Big, puffed-up Yorkies for the Sunday roast",
+      short: "Flour, eggs and milk, poured into hot oil and left alone to puff up. Big Yorkies for the Sunday roast.",
+      intro: [
+        "Flour, eggs and milk, poured into hot oil and left alone to puff up.",
+        "Pick how many puds you’re making and the batter follows."
+      ],
+      tags: ["Sunday roast", "Freezes well"],
+      art: "yorkie",
+      control: { heading: "How many puds?", help: "Go up or down a tin at a time, 4 puds per tin. The batter follows.", burst: ["Makes"] },
+      servesNote: "the Sunday roast",
+      scaleBy: { type: "servings", baseServings: 8, step: 4, min: 4, max: 24, label: "Number of puds", unit: "puds", yieldLabel: "Makes",
+        container: { per: 4, one: "4-hole Yorkshire pudding tin", many: "4-hole Yorkshire pudding tins" } },
+      timing: {
+        prepMin: 15,
+        fixed: [{ key: "bakeTime", label: "Bake", min: 25, display: "20–25 min" }],
+        note: "including heating the tins"
+      },
+      groups: [
+        {
+          name: "Batter",
+          items: [
+            { id: "flour", scale: "servings", qty: 140, unit: "g", roundTo: 5, text: "{amt} plain flour" },
+            { id: "eggs", scale: "servings", qty: 4, unit: "count", text: "{amt} eggs" },
+            { id: "milk", scale: "servings", qty: 200, unit: "ml", roundTo: 10, text: "{amt} milk" },
+            { id: "season", scale: "none", text: "Salt and pepper" }
+          ]
+        },
+        {
+          name: "For the tins",
+          items: [
+            { id: "oil", scale: "none", text: "Sunflower oil" }
+          ]
+        }
+      ],
+      steps: [
+        { title: "Heat the oven", text: "to 230°C (210°C fan, gas 8)." },
+        { title: "Heat the tins.", text: "Drizzle a little sunflower oil evenly into {tins} (or non-stick muffin tins, for smaller puds) and put them in the oven to heat through." },
+        { title: "Make the batter.", text: "Tip {amt_flour} plain flour into a bowl and beat in {amt_eggs} eggs until smooth." },
+        { text: "Gradually add {amt_milk} milk and keep beating until the mix is completely lump-free. Season with salt and pepper." },
+        { title: "Fill the tins.", text: "Pour the batter into a jug, then take the hot tins out of the oven. Carefully and evenly pour the batter into the holes." },
+        { title: "Bake.", text: "Put the tins back in the oven and leave them undisturbed for **{bakeTime}**, until the puddings have puffed up and browned." },
+        { text: "Serve straight away." }
+      ],
+      notes: [
+        { title: "Freezing.", text: "You can cool them and freeze them for up to 1 month." },
+        { title: "Leave them alone.", text: "Don’t open the oven while they’re puffing up." }
+      ],
+      source: "Gemma’s Yorkshire pudding recipe."
     }
   ];
 
@@ -663,13 +717,14 @@
       factor = servings / sb.baseServings;
     }
     if (eaters == null) eaters = servings;
-    var amounts = {};
+    var amounts = {}, vals = {};
     recipe.groups.forEach(function (g) {
       g.items.forEach(function (ing) {
         if (ing.scale !== "none" && (ing.qty != null || ing.perServing != null)) amounts[ing.id] = scaleAmount(ing, factor, eaters).text;
+        if (amounts[ing.id] != null) vals["amt_" + ing.id] = amounts[ing.id];
       });
     });
-    var vals = {}, total = t.prepMin || 0;
+    var total = t.prepMin || 0;
     vals.prepTime = "about " + fmtDuration(t.prepMin || 0);
     if (t.boil && grams != null) {
       var boilMin = Math.max(t.boil.roundTo, roundTo(grams / t.boil.perGrams * t.boil.minutesPer, t.boil.roundTo));
@@ -677,11 +732,17 @@
       vals.boilMinutes = String(boilMin);
       total += boilMin;
     }
-    (t.fixed || []).forEach(function (f) { vals[f.key] = fmtDuration(f.min); total += f.min; });
+    (t.fixed || []).forEach(function (f) { vals[f.key] = f.display || fmtDuration(f.min); total += f.min; });
     vals.totalTime = "about " + fmtDuration(total);
     vals.totalMinutes = String(total);
     vals.serves = String(servings);
     vals.servesText = "about " + servings;
+    vals.badge = sb.type === "weight" ? "Feeds about " + servings : (sb.yieldLabel || "Serves") + " " + servings;
+    if (sb.container) {
+      var tinCount = Math.ceil(servings / sb.container.per);
+      var words = ["", "one", "two", "three", "four", "five", "six"];
+      vals.tins = (words[tinCount] || tinCount) + " " + (tinCount === 1 ? sb.container.one : sb.container.many);
+    }
     vals.servings = String(servings);
     vals.eaters = String(eaters);
     if (grams != null) {
@@ -790,13 +851,13 @@
             "</div>";
         }
         return '<div class="scaler" data-scaler data-type="servings">' +
-          '<span class="scaler-label" id="' + id + '-label">Servings</span>' +
+          '<span class="scaler-label" id="' + id + '-label">' + esc(sb.label || "Servings") + "</span>" +
           '<div class="scaler-row stepper" role="group" aria-labelledby="' + id + '-label">' +
-            '<button type="button" class="scaler-nudge" data-serv="-1" aria-label="Fewer servings">−</button>' +
+            '<button type="button" class="scaler-nudge" data-serv="-1" aria-label="Fewer">−</button>' +
             '<output class="stepper-value" aria-live="polite">' + val("servings", current.vals.servings) + "</output>" +
-            '<button type="button" class="scaler-nudge" data-serv="1" aria-label="More servings">+</button>' +
+            '<button type="button" class="scaler-nudge" data-serv="1" aria-label="More">+</button>' +
           "</div>" +
-          '<button type="button" class="scaler-reset" data-reset>Reset to ' + sb.baseServings + "</button>" +
+          '<button type="button" class="scaler-reset" data-reset>Reset to ' + esc(sb.baseServings + (sb.unit ? " " + sb.unit : "")) + "</button>" +
           "</div>";
       },
       wakeLock: function () {
@@ -889,7 +950,7 @@
         if (saved.unit === "lb" || saved.unit === "kg") state.unit = saved.unit;
         if (typeof saved.grams === "number" && saved.grams >= sb.minGrams && saved.grams <= sb.maxGrams) state.grams = saved.grams;
         if (sb.eaters && typeof saved.eaters === "number" && saved.eaters >= sb.eaters.min && saved.eaters <= sb.eaters.max) state.eaters = saved.eaters;
-      } else if (typeof saved.servings === "number" && saved.servings >= 1 && saved.servings <= 40) {
+      } else if (typeof saved.servings === "number" && saved.servings >= (sb.min || 1) && saved.servings <= (sb.max || 40) && saved.servings % (sb.step || 1) === 0) {
         state.servings = saved.servings;
       }
       var ticks = Array.isArray(saved.ticks) ? saved.ticks : [];
@@ -916,8 +977,8 @@
         if (announce) {
           clearTimeout(announceTimer);
           announceTimer = setTimeout(function () {
-            announcer.textContent = (sb.type === "weight" ? "Updated for " + r.vals.weight + ". " : "Updated for " + r.servings + " servings. ") +
-              (sb.eaters ? "Joint feeds about " + r.servings + ". Chips and peas for " + r.eaters + ". " : "Serves about " + r.servings + ". ") + (r.vals.boilTime ? "Boil for " + r.vals.boilTime + ". " : "") + "Total " + r.vals.totalTime + ".";
+            announcer.textContent = (sb.type === "weight" ? "Updated for " + r.vals.weight + ". " : "Updated for " + r.servings + " " + (sb.unit || "servings") + ". ") +
+              (sb.eaters ? "Joint feeds about " + r.servings + ". Chips and peas for " + r.eaters + ". " : sb.type === "weight" ? "Serves about " + r.servings + ". " : "") + (r.vals.boilTime ? "Boil for " + r.vals.boilTime + ". " : "") + "Total " + r.vals.totalTime + ".";
           }, 700);
         }
         persist();
@@ -969,7 +1030,7 @@
       }
       root.querySelectorAll("[data-serv]").forEach(function (b) {
         b.addEventListener("click", function () {
-          state.servings = Math.min(40, Math.max(1, state.servings + Number(b.getAttribute("data-serv"))));
+          state.servings = Math.min(sb.max || 40, Math.max(sb.min || 1, state.servings + Number(b.getAttribute("data-serv")) * (sb.step || 1)));
           apply(true);
         });
       });
@@ -1094,6 +1155,19 @@
       '<path d="M40 96 q 8 6 4 16" fill="none" stroke="#E07A84" stroke-width="3" stroke-linecap="round"/>' +
       '</svg>';
   }
+  function yorkieSVG() {
+    return '<svg viewBox="0 0 220 170" xmlns="http://www.w3.org/2000/svg">' +
+      '<ellipse cx="112" cy="140" rx="100" ry="22" fill="#FFFFFF" stroke="' + INK + '" stroke-width="5"/>' +
+      '<ellipse cx="112" cy="136" rx="78" ry="12" fill="#FFF6E6"/>' +
+      '<path d="M34 116 C 26 74, 44 44, 68 58 C 74 28, 104 22, 112 48 C 124 20, 158 26, 158 54 C 182 44, 198 80, 188 116 C 164 142, 58 142, 34 116 Z" fill="#F4B740" stroke="' + INK + '" stroke-width="5" stroke-linejoin="round"/>' +
+      '<ellipse cx="111" cy="98" rx="52" ry="19" fill="#C9771F" stroke="' + INK + '" stroke-width="4"/>' +
+      '<ellipse cx="111" cy="102" rx="38" ry="11" fill="#9E5A14"/>' +
+      '<path d="M58 70 C 62 58, 70 54, 76 56" fill="none" stroke="#FFE08A" stroke-width="6" stroke-linecap="round"/>' +
+      '<path d="M104 40 C 110 32, 118 32, 122 38" fill="none" stroke="#FFE08A" stroke-width="6" stroke-linecap="round"/>' +
+      '<path d="M150 50 C 158 46, 166 50, 168 56" fill="none" stroke="#FFE08A" stroke-width="5" stroke-linecap="round"/>' +
+      '</svg>';
+  }
+  function artSVG(r) { return r && r.art === "yorkie" ? yorkieSVG() : hamSVG(); }
   function orangeSVG() {
     var segs = "";
     for (var i = 0; i < 8; i++) {
@@ -1160,8 +1234,8 @@
       var cards = recipes.map(function (r) {
         var d = api.defaults(r);
         return '<li class="card"><a class="card-link" href="#/' + r.slug + '">' +
-          '<div class="card-art">' + sticker("", hamSVG()) +
-            '<span class="card-badge pill">Feeds ' + api.esc(d.servesText) + '</span></div>' +
+          '<div class="card-art">' + sticker("", artSVG(r)) +
+            '<span class="card-badge pill">' + api.esc(d.badge) + '</span></div>' +
           '<div class="card-body">' +
             '<h3>' + api.esc(r.title) + '</h3>' +
             '<p>' + api.esc(r.short) + '</p>' +
@@ -1187,7 +1261,7 @@
           '</div>' +
         '</section>' +
         '<section class="how" aria-label="How the recipes work"><ul class="pills">' +
-          '<li class="pill"><b aria-hidden="true">1</b> Weigh your joint and say who’s eating</li>' +
+          '<li class="pill"><b aria-hidden="true">1</b> Say how much you’re cooking and the amounts follow</li>' +
           '<li class="pill"><b aria-hidden="true">2</b> Tick things off as you go</li>' +
           '<li class="pill"><b aria-hidden="true">3</b> Keep the screen awake while you cook</li>' +
         '</ul></section>' +
@@ -1226,17 +1300,17 @@
             '<p class="hero-sub">' + api.esc(r.subtitle) + '</p>' +
           '</div>' +
           sticker("s-orange-mini", orangeSVG()) +
-          '<div class="hero-art" aria-hidden="true">' + sticker("", hamSVG()) + '</div>' +
+          '<div class="hero-art" aria-hidden="true">' + sticker("", artSVG(r)) + '</div>' +
         '</header>' +
 
         '<section class="control block b-lilac" aria-labelledby="size-h">' +
-          '<h2 id="size-h">How big is yours?</h2>' +
-          '<p class="control-help">Weigh your joint and say how many are eating. Amounts and timings follow.</p>' +
+          '<h2 id="size-h">' + api.esc(r.control.heading) + '</h2>' +
+          '<p class="control-help">' + api.esc(r.control.help) + '</p>' +
           api.scaler() +
           '<div class="readout" aria-live="polite" aria-atomic="true">' +
             '<div class="burst sticker-pop">' + burstSVG("#FFC233") +
-              '<p class="burst-in" style="margin:0"><small>Joint feeds<br>about</small><span class="big">' + api.val("serves") + '</span></p></div>' +
-            '<p class="ticket sticker-pop" style="margin:0"><small>Total time</small><span class="big">' + api.val("totalTime") + '</span><span class="soft">' + api.esc(r.timing.note) + '</span></p>' +
+              '<p class="burst-in" style="margin:0"><small>' + r.control.burst.map(api.esc).join("<br>") + '</small><span class="big">' + api.val("serves") + '</span></p></div>' +
+            '<p class="ticket sticker-pop" style="margin:0"><small>Total time</small><span class="big">' + api.val("totalTime") + '</span><span class="soft">' + api.esc(r.timing.note || "") + '</span></p>' +
           '</div>' +
           '<ul class="times" aria-label="Time breakdown">' + times + '</ul>' +
           '<div class="control-actions">' + api.wakeLock() + '</div>' +
